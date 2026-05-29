@@ -109,8 +109,9 @@ def build_player_url(stream_url, title, thumb='', quality=''):
         u += f"&quality={urllib.parse.quote(quality, safe='')}"
     return u
 
+
 # ─────────────────────────────────────────────
-# DOWNLOAD & SEND — with audio fix ✅
+# DOWNLOAD & SEND — full audio fix ✅
 # ─────────────────────────────────────────────
 
 async def download_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
@@ -119,14 +120,25 @@ async def download_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     ydl_opts = {
         'quiet': True,
         'outtmpl': 'downloads/%(id)s.%(ext)s',
-        # ✅ This format properly merges video + audio using ffmpeg
-        'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
+        'format': (
+            'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/'
+            'bestvideo[height<=720]+bestaudio/'
+            'best[height<=720][ext=mp4]/'
+            'best'
+        ),
         'merge_output_format': 'mp4',
         'noplaylist': True,
-        'postprocessors': [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4',
-        }],
+        'prefer_ffmpeg': True,
+        'keepvideo': False,
+        'postprocessors': [
+            {
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            },
+            {
+                'key': 'FFmpegMetadata',
+            },
+        ],
     }
 
     os.makedirs('downloads', exist_ok=True)
@@ -302,7 +314,5 @@ def main():
     app.run_polling()
 
 
-if __name__ == "__main__":
-    main()
 if __name__ == "__main__":
     main()

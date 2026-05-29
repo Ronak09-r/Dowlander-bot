@@ -12,9 +12,9 @@ from telegram.ext import (
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-BOT_TOKEN = "8334854931:AAGKspTL-o0VvVgbWcxNL0Va6oQHGkT36SI"
-WEB_PLAYER_URL = "https://your-player.vercel.app"  # only used for Terabox
-FORCE_CHANNEL = "SteveXearning"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", ""8334854931:AAGKspTL-o0VvVgbWcxNL0Va6oQHGkT36SI"")
+WEB_PLAYER_URL = os.environ.get("WEB_PLAYER_URL", "https://your-player.vercel.app")
+FORCE_CHANNEL = os.environ.get("FORCE_CHANNEL", "SteveXearning")
 
 # ─────────────────────────────────────────────
 # FORCE JOIN
@@ -54,10 +54,6 @@ def is_terabox_url(url):
     return any(x in url for x in [
         '1024tera.com', 'terabox.com', 'teraboxapp.com', 'freeterabox.com'
     ])
-
-
-def is_instagram_url(url):
-    return 'instagram.com' in url
 
 
 def is_supported_url(url):
@@ -114,20 +110,23 @@ def build_player_url(stream_url, title, thumb='', quality=''):
     return u
 
 # ─────────────────────────────────────────────
-# DOWNLOAD & SEND (Instagram, YouTube, TikTok, Twitter)
+# DOWNLOAD & SEND — with audio fix ✅
 # ─────────────────────────────────────────────
 
 async def download_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
     msg = await update.message.reply_text("⬇️ Downloading...")
 
-    # Download options — tries best quality under 50MB
     ydl_opts = {
         'quiet': True,
         'outtmpl': 'downloads/%(id)s.%(ext)s',
-        'format': 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[ext=mp4]/best',
+        # ✅ This format properly merges video + audio using ffmpeg
+        'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
         'merge_output_format': 'mp4',
         'noplaylist': True,
-        'max_filesize': 49 * 1024 * 1024,  # 49MB Telegram limit
+        'postprocessors': [{
+            'key': 'FFmpegVideoConvertor',
+            'preferedformat': 'mp4',
+        }],
     }
 
     os.makedirs('downloads', exist_ok=True)
@@ -136,19 +135,17 @@ async def download_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filepath = ydl.prepare_filename(info)
-            # Fix extension if needed
             if not filepath.endswith('.mp4'):
                 filepath = filepath.rsplit('.', 1)[0] + '.mp4'
 
             title = info.get('title', 'Video')[:50]
-            thumbnail = info.get('thumbnail', '')
 
-            # Check if it's a photo post (Instagram image)
+            # Instagram image post
             if info.get('ext') in ['jpg', 'jpeg', 'png', 'webp']:
                 await msg.delete()
                 await update.message.reply_photo(
                     photo=open(filepath, 'rb'),
-                    caption=f"📸 *{title}*\n\n via @{context.bot.username}",
+                    caption=f"📸 *{title}*\n\nvia @{context.bot.username}",
                     parse_mode="Markdown"
                 )
             else:
@@ -157,20 +154,19 @@ async def download_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                     os.remove(filepath)
                     await msg.edit_text(
                         "❌ Video is too large (over 50MB).\n"
-                        "Try a Terabox link or a shorter video."
+                        "Try a shorter video."
                     )
                     return
 
                 await msg.edit_text("📤 Uploading...")
                 await update.message.reply_video(
                     video=open(filepath, 'rb'),
-                    caption=f"🎬 *{title}*\n\n via @{context.bot.username}",
+                    caption=f"🎬 *{title}*\n\nvia @{context.bot.username}",
                     parse_mode="Markdown",
                     supports_streaming=True,
                 )
                 await msg.delete()
 
-        # Cleanup
         if os.path.exists(filepath):
             os.remove(filepath)
 
@@ -182,7 +178,6 @@ async def download_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             f"`{clean_error[:150]}`",
             parse_mode="Markdown"
         )
-        # Cleanup on error
         for f in os.listdir('downloads'):
             try:
                 os.remove(os.path.join('downloads', f))
@@ -223,7 +218,7 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        # ── TERABOX — web player inside Telegram ──
+        # ── TERABOX ──
         if is_terabox_url(url):
             msg = await update.message.reply_text("🔍 Fetching Terabox info...")
             stream_url, title, thumbnail = get_terabox_stream(url)
@@ -232,7 +227,6 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard = [[
                 InlineKeyboardButton("👉 CLICK HERE", web_app=WebAppInfo(url=player_url))
             ]]
-
             caption = (
                 f"*How To Watch Video, Click here*\n\n"
                 f"📦 | Here's your stream link :\n"
@@ -240,7 +234,6 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🚫 | If you are not getting video below. Then "
                 f"try opening the link manually using the link provided above.(real)"
             )
-
             await msg.delete()
             if thumbnail:
                 await update.message.reply_photo(
@@ -256,7 +249,7 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
 
-        # ── INSTAGRAM / YOUTUBE / TIKTOK / TWITTER — download & send directly ──
+        # ── INSTAGRAM / YOUTUBE / TIKTOK / TWITTER ──
         elif is_supported_url(url):
             await download_and_send(update, context, url)
 
@@ -309,5 +302,7 @@ def main():
     app.run_polling()
 
 
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()

@@ -12,7 +12,7 @@ from telegram.ext import (
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-BOT_TOKEN = os.environ.get("BOT_TOKEN", ""8334854931:AAGKspTL-o0VvVgbWcxNL0Va6oQHGkT36SI")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8334854931:AAGKspTL-o0VvVgbWcxNL0Va6oQHGkT36SI")
 WEB_PLAYER_URL = os.environ.get("WEB_PLAYER_URL", "https://your-player.vercel.app")
 FORCE_CHANNEL = os.environ.get("FORCE_CHANNEL", "SteveXearning")
 
